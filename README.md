@@ -1,14 +1,18 @@
 # ComfyTray
 
-ComfyTray is a small Windows tray launcher for ComfyUI. It starts ComfyUI in the Windows system tray.
+ComfyTray is a small Windows tray launcher for [ComfyUI](https://github.com/comfy-org/comfyui). It starts ComfyUI in the Windows system tray.
 
-> This is only a launcher. You need to python virtual environment in `.venv` by your self.
+You can start and exit ComfyUI just like a general windows application, with your startup options memorized in Windows shortcut.
+
+> This is only a launcher. You need to resolve python environment in `ComfyUI\.venv` by yourself.
 
 ## Install
 
 Download: [Go to Releases](../../releases)
 
-Extract zip and put `ComfyTray.exe` and `ComfyTray.exe.config` into ComfyUI working directory and click.
+Extract zip and put `ComfyTray.exe` and `ComfyTray.exe.config` into ComfyUI working directory.
+
+Click `ComfyTray.exe` to start.
 
 ## Startup options
 
