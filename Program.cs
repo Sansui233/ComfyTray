@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using var singleInstance = new Mutex(initiallyOwned: true, name: @"Global\ComfyTray.SingleInstance", createdNew: out var isFirstInstance);
 if (!isFirstInstance) return;
 
+DpiAwareness.Enable();
 Application.EnableVisualStyles();
 Application.SetCompatibleTextRenderingDefault(false);
 Application.Run(new TrayAppContext(args));
@@ -18,8 +19,8 @@ sealed class TrayAppContext : ApplicationContext
     private readonly NotifyIcon _tray;
     private StartupLogForm? _startupLogForm;
     private Process? _process;
-    private StreamWriter? _stdoutLog;
-    private StreamWriter? _stderrLog;
+    private StreamWriter? _log;
+    private readonly object _logLock = new();
     private bool _hasOpenedBrowser;
     private bool _startupSucceeded;
     private bool _exitWhenStartupLogCloses;
@@ -72,31 +73,30 @@ sealed class TrayAppContext : ApplicationContext
 
         Directory.CreateDirectory(_logDir);
 
-        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-        _stdoutLog = new StreamWriter(Path.Combine(_logDir, $"comfyui-{timestamp}.out.log"), append: false) { AutoFlush = true };
-        _stderrLog = new StreamWriter(Path.Combine(_logDir, $"comfyui-{timestamp}.err.log"), append: false) { AutoFlush = true };
+        _log?.Dispose();
+        _log = new StreamWriter(Path.Combine(_logDir, "comfytray.log"), append: false) { AutoFlush = true };
 
         var psi = CreateComfyProcessStartInfo();
         if (psi is null)
         {
             var activatePath = Path.Combine(_workdir, ".venv", "Scripts", "activate.bat");
-            HandleOutputLine($"[ComfyTray] Working directory: {_workdir}", _stderrLog);
-            HandleOutputLine("[ComfyTray] Could not find uv in PATH.", _stderrLog);
-            HandleOutputLine($"[ComfyTray] Could not find virtual environment activation script: {activatePath}", _stderrLog);
+            HandleOutputLine($"[ComfyTray] Working directory: {_workdir}");
+            HandleOutputLine("[ComfyTray] Could not find uv in PATH.");
+            HandleOutputLine($"[ComfyTray] Could not find virtual environment activation script: {activatePath}");
             return;
         }
 
-        HandleOutputLine($"[ComfyTray] Working directory: {_workdir}", _stdoutLog);
-        HandleOutputLine($"[ComfyTray] Startup command: {_startupCommandDescription}", _stdoutLog);
+        HandleOutputLine($"[ComfyTray] Working directory: {_workdir}");
+        HandleOutputLine($"[ComfyTray] Startup command: {_startupCommandDescription}");
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.OutputDataReceived += (_, e) =>
         {
-            if (e.Data is not null) HandleOutputLine(e.Data, _stdoutLog);
+            if (e.Data is not null) HandleOutputLine(e.Data);
         };
         _process.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data is not null) HandleOutputLine(e.Data, _stderrLog);
+            if (e.Data is not null) HandleOutputLine(e.Data);
         };
         _process.Exited += (_, _) =>
         {
@@ -116,7 +116,7 @@ sealed class TrayAppContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            HandleOutputLine($"[ComfyTray] Failed to start ComfyUI: {ex.Message}", _stderrLog);
+            HandleOutputLine($"[ComfyTray] Failed to start ComfyUI: {ex.Message}");
             _process.Dispose();
             _process = null;
             return;
@@ -201,16 +201,17 @@ sealed class TrayAppContext : ApplicationContext
         {
             _process?.Dispose();
             _process = null;
-            _stdoutLog?.Dispose();
-            _stdoutLog = null;
-            _stderrLog?.Dispose();
-            _stderrLog = null;
+            _log?.Dispose();
+            _log = null;
         }
     }
 
-    private void HandleOutputLine(string line, StreamWriter? logWriter)
+    private void HandleOutputLine(string line)
     {
-        logWriter?.WriteLine(line);
+        lock (_logLock)
+        {
+            _log?.WriteLine(line);
+        }
         AppendStartupLog(line);
 
         var match = GuiUrlPattern.Match(line);
@@ -483,4 +484,25 @@ sealed class TrayAppContext : ApplicationContext
         int ipVersion,
         TCP_TABLE_CLASS tableClass,
         uint reserved);
+}
+
+static class DpiAwareness
+{
+    private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new(-4);
+
+    public static void Enable()
+    {
+        if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+        {
+            return;
+        }
+
+        SetProcessDPIAware();
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware();
 }

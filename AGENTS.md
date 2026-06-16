@@ -79,7 +79,9 @@ Always keep the startup diagnostics. The log should show:
 ComfyUI stdout and stderr are both:
 
 - appended to the startup log window
-- written to timestamped files under `logs\` next to `ComfyTray.exe`
+- written to `logs\comfytray.log` next to `ComfyTray.exe`
+
+`logs\comfytray.log` is overwritten each time ComfyUI starts. Do not switch back to timestamped stdout/stderr files unless the logging model is intentionally changed.
 
 Ready detection is based on this pattern:
 

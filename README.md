@@ -1,6 +1,6 @@
 # ComfyTray
 
-ComfyTray is a small Windows tray launcher for ComfyUI. It starts ComfyUI into Windows system tray.
+ComfyTray is a small Windows tray launcher for ComfyUI. It starts ComfyUI in the Windows system tray.
 
 > This is only a launcher. You need to python virtual environment in `.venv` by your self.
 
@@ -8,7 +8,7 @@ ComfyTray is a small Windows tray launcher for ComfyUI. It starts ComfyUI into W
 
 Download: [Go to Releases](../../releases)
 
-Put `ComfyTray.exe` and `ComfyTray.exe.config` into ComfyUI working directory and click.
+Extract zip and put `ComfyTray.exe` and `ComfyTray.exe.config` into ComfyUI working directory and click.
 
 ## Startup options
 
@@ -54,20 +54,13 @@ Right-click the tray icon to access:
 
 ## Logs
 
-ComfyTray writes process output to:
+ComfyTray writes stdout and stderr to a single log file:
 
 ```text
-logs\
+logs\comfytray.log
 ```
 
-inside the directory containing `ComfyTray.exe`.
-
-Each run creates separate stdout and stderr files:
-
-```text
-comfyui-YYYYMMDD-HHMMSS.out.log
-comfyui-YYYYMMDD-HHMMSS.err.log
-```
+inside the directory containing `ComfyTray.exe`. The file is cleared and rewritten each time ComfyUI starts.
 
 ## Publish
 
