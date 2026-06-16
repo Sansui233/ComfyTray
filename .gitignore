@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+artifacts/
+
+# User-specific IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# Runtime logs
+logs/
+*.log
+
+# Local environment files
+.env
+.env.*
+
+# OS generated files
+Thumbs.db
+Desktop.ini

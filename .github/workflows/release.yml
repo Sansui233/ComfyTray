@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+
+    steps:
+      - name: Validate tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Tag '$tag' does not match vMAJOR.MINOR.PATCH, for example v0.1.0."
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish Windows executable
+        shell: pwsh
+        run: ./scripts/publish-release.ps1
+
+      - name: Package release asset
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $publishDir = "artifacts/release"
+          $zipPath = "artifacts/ComfyTray-$tag-net48.zip"
+
+          if (-not (Test-Path -LiteralPath "$publishDir/ComfyTray.exe")) {
+            throw "Expected executable was not found: $publishDir/ComfyTray.exe"
+          }
+
+          Compress-Archive -Path "$publishDir/*" -DestinationPath $zipPath -Force
+          Write-Host "Release asset: $zipPath"
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $zipPath = "artifacts/ComfyTray-$tag-net48.zip"
+
+          gh release create $tag $zipPath `
+            --title $tag `
+            --generate-notes `
+            --verify-tag
