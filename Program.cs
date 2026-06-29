@@ -30,6 +30,7 @@ sealed class TrayAppContext : ApplicationContext
     private readonly string _host;
     private readonly int _port;
     private readonly bool _lowvram;
+    private readonly int? _proxyPort;
     private readonly string _logDir;
     private readonly SynchronizationContext _uiContext;
     private string? _startupCommandDescription;
@@ -40,11 +41,19 @@ sealed class TrayAppContext : ApplicationContext
         _host = GetArg(args, "--host") ?? GetArg(args, "--ip") ?? "127.0.0.1";
         _port = int.TryParse(GetArg(args, "--port"), out var p) ? p : 8188;
         _lowvram = args.Contains("--lowvram");
+        _proxyPort = TryParseTcpPort(GetArg(args, "--proxy"), out var proxyPort) ? proxyPort : null;
         _logDir = Path.Combine(AppContext.BaseDirectory, "logs");
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         var menu = new ContextMenuStrip();
+        var openFoldersMenu = new ToolStripMenuItem("📁 Open Folder");
+        openFoldersMenu.DropDownItems.Add("📁 Open ComfyUI", null, (_, _) => OpenComfyFolder());
+        openFoldersMenu.DropDownItems.Add("📁 Open Output", null, (_, _) => OpenComfyFolder("output"));
+        openFoldersMenu.DropDownItems.Add("📁 Open Input", null, (_, _) => OpenComfyFolder("input"));
+        openFoldersMenu.DropDownItems.Add("📁 Open Models", null, (_, _) => OpenComfyFolder("models"));
+        openFoldersMenu.DropDownItems.Add("📁 Open Custom Nodes", null, (_, _) => OpenComfyFolder("custom_nodes"));
         menu.Items.Add("Open ComfyUI", null, (_, _) => OpenBrowser());
+        menu.Items.Add(openFoldersMenu);
         menu.Items.Add("Open Logs", null, (_, _) => OpenLogs());
         menu.Items.Add("Restart", null, (_, _) => Restart());
         menu.Items.Add("Exit", null, (_, _) => Exit());
@@ -88,6 +97,10 @@ sealed class TrayAppContext : ApplicationContext
 
         HandleOutputLine($"[ComfyTray] Working directory: {_workdir}");
         HandleOutputLine($"[ComfyTray] Startup command: {_startupCommandDescription}");
+        if (_proxyPort is not null)
+        {
+            HandleOutputLine($"[ComfyTray] Proxy environment: http://127.0.0.1:{_proxyPort.Value}");
+        }
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.OutputDataReceived += (_, e) =>
@@ -164,7 +177,7 @@ sealed class TrayAppContext : ApplicationContext
 
     private ProcessStartInfo CreateBaseProcessStartInfo(string fileName)
     {
-        return new ProcessStartInfo
+        var psi = new ProcessStartInfo
         {
             FileName = fileName,
             WorkingDirectory = _workdir,
@@ -173,6 +186,22 @@ sealed class TrayAppContext : ApplicationContext
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+
+        ApplyProxyEnvironment(psi);
+        return psi;
+    }
+
+    private void ApplyProxyEnvironment(ProcessStartInfo psi)
+    {
+        if (_proxyPort is null) return;
+
+        var proxy = $"http://127.0.0.1:{_proxyPort.Value}";
+        psi.EnvironmentVariables["HTTP_PROXY"] = proxy;
+        psi.EnvironmentVariables["HTTPS_PROXY"] = proxy;
+        psi.EnvironmentVariables["ALL_PROXY"] = proxy;
+        psi.EnvironmentVariables["http_proxy"] = proxy;
+        psi.EnvironmentVariables["https_proxy"] = proxy;
+        psi.EnvironmentVariables["all_proxy"] = proxy;
     }
 
     private void Restart()
@@ -275,6 +304,20 @@ sealed class TrayAppContext : ApplicationContext
         Process.Start(new ProcessStartInfo
         {
             FileName = _logDir,
+            UseShellExecute = true
+        });
+    }
+
+    private void OpenComfyFolder(params string[] relativePath)
+    {
+        var folder = relativePath.Length == 0
+            ? _workdir
+            : Path.Combine(new[] { _workdir }.Concat(relativePath).ToArray());
+
+        Directory.CreateDirectory(folder);
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = folder,
             UseShellExecute = true
         });
     }
@@ -382,6 +425,13 @@ sealed class TrayAppContext : ApplicationContext
 
     private static string? GetArg(string[] args, string name)
     {
+        var prefix = name + "=";
+        foreach (var arg in args)
+        {
+            if (arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return arg.Substring(prefix.Length);
+        }
+
         for (var i = 0; i < args.Length - 1; i++)
         {
             if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase))
@@ -389,6 +439,11 @@ sealed class TrayAppContext : ApplicationContext
         }
 
         return null;
+    }
+
+    private static bool TryParseTcpPort(string? value, out int port)
+    {
+        return int.TryParse(value, out port) && port is > 0 and <= 65535;
     }
 
     private static void KillTcpListenersOnPort(int port)
@@ -506,3 +561,4 @@ static class DpiAwareness
     [DllImport("user32.dll")]
     private static extern bool SetProcessDPIAware();
 }
+
